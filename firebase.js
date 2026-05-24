@@ -24,7 +24,7 @@ export const cloudinaryConfig = {
 // === CLICKPESA ===
 export const clickpesaConfig = {
   // Public client identifier; secret key MUST stay server-side (Netlify function / Cloud Function)
-  merchantId: "3220",
+  merchantId: "IDKkBydy1iKV1fDTNIMND3Y0IHjARGMv",
   // The endpoint of your server (Netlify function) that proxies ClickPesa.
   apiEndpoint: "/.netlify/functions/clickpesa"
 };
