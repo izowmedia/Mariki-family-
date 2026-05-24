@@ -1,0 +1,99 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Dashboard — Mariki Family Portal</title></head>
+<body>
+<div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app">
+  <div id="shell-sidebar"></div>
+  <div class="main">
+    <div id="shell-topbar"></div>
+    <div class="content">
+      
+<div class="page-head">
+  <div><h1>Family Dashboard</h1><div class="sub">Karibu, <span data-user-name></span> — here is whats happening today.</div></div>
+  <div style="display:flex;gap:10px"><a href="contributions.html" class="btn btn-gold"><i class="fa-solid fa-hand-holding-dollar"></i> View Contributions</a></div>
+</div>
+<div class="grid cols-4">
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-users"></i></div><span class="delta">+12 this month</span></div><div class="value" id="stMembers">—</div><div class="label">Total Members</div></div>
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-hourglass-half"></i></div><span class="delta">awaiting</span></div><div class="value" id="stPending">—</div><div class="label">Pending Approvals</div></div>
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-coins"></i></div><span class="delta">live</span></div><div class="value" id="stRaised">—</div><div class="label">Total Raised (TZS)</div></div>
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-regular fa-calendar"></i></div><span class="delta">upcoming</span></div><div class="value" id="stEvents">—</div><div class="label">Family Events</div></div>
+</div>
+<div class="grid cols-2" style="margin-top:22px">
+  <div class="chart-card"><div class="head"><h3>Contributions over time</h3><span class="badge gold">Last 6 months</span></div><canvas id="chartLine" height="120"></canvas></div>
+  <div class="chart-card"><div class="head"><h3>Members by branch</h3><span class="badge info">Distribution</span></div><canvas id="chartDonut" height="120"></canvas></div>
+</div>
+<div class="grid cols-2" style="margin-top:22px">
+  <div class="chart-card"><div class="head"><h3>Recent payments</h3><a href="payments.html" style="color:var(--gold-2);font-size:13px">View all →</a></div>
+    <div class="table-wrap"><table class="table" id="recentPayments"><thead><tr><th>Member</th><th>Contribution</th><th>Amount</th><th>Status</th></tr></thead><tbody><tr><td colspan="4"><div class="skeleton" style="height:14px;margin:6px 0"></div><div class="skeleton" style="height:14px;margin:6px 0"></div></td></tr></tbody></table></div>
+  </div>
+  <div class="chart-card"><div class="head"><h3>Upcoming events</h3><a href="events.html" style="color:var(--gold-2);font-size:13px">View all →</a></div>
+    <div id="upcoming"><div class="skeleton" style="height:60px;margin-bottom:8px"></div><div class="skeleton" style="height:60px"></div></div>
+  </div>
+</div>
+
+    </div>
+  </div>
+</div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { fmtTZS, fmtDate } from "./assets/js/common.js";
+window.initPage = async ()=>{
+  try{
+    const usersSnap = await getDocs(collection(db,"users"));
+    let total=0, pending=0; const branches={};
+    usersSnap.forEach(d=>{ const u=d.data(); total++; if(u.status==="pending") pending++; const b=u.branch||"Unspecified"; branches[b]=(branches[b]||0)+1; });
+    document.getElementById("stMembers").textContent=total;
+    document.getElementById("stPending").textContent=pending;
+
+    const paysSnap = await getDocs(collection(db,"payments"));
+    let raised=0; paysSnap.forEach(d=>{ const p=d.data(); if(p.status==="completed") raised+=Number(p.amount||0); });
+    document.getElementById("stRaised").textContent = fmtTZS(raised).replace("TZS ","");
+
+    const evSnap = await getDocs(collection(db,"events"));
+    document.getElementById("stEvents").textContent = evSnap.size;
+
+    // Chart line — synthetic from payments by month
+    const months={}; const now=new Date();
+    for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months[d.toLocaleString("en",{month:"short"})]=0; }
+    paysSnap.forEach(d=>{ const p=d.data(); if(p.status!=="completed"||!p.createdAt) return; const dt=p.createdAt.toDate?p.createdAt.toDate():new Date(p.createdAt); const m=dt.toLocaleString("en",{month:"short"}); if(m in months) months[m]+=Number(p.amount||0); });
+    new Chart(document.getElementById("chartLine"),{
+      type:"line",data:{labels:Object.keys(months),datasets:[{label:"TZS",data:Object.values(months),borderColor:"#d4af37",backgroundColor:"rgba(212,175,55,0.15)",fill:true,tension:0.4,pointBackgroundColor:"#f4d35e"}]},
+      options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#aaa"},grid:{color:"rgba(255,255,255,0.05)"}},y:{ticks:{color:"#aaa"},grid:{color:"rgba(255,255,255,0.05)"}}}}
+    });
+    new Chart(document.getElementById("chartDonut"),{
+      type:"doughnut",data:{labels:Object.keys(branches),datasets:[{data:Object.values(branches),backgroundColor:["#d4af37","#f4d35e","#bf953f","#aa771c","#fcf6ba","#b38728"]}]},
+      options:{plugins:{legend:{labels:{color:"#ccc"}}}}
+    });
+
+    // Recent payments
+    let tbody = document.querySelector("#recentPayments tbody"); tbody.innerHTML="";
+    const recent = (await getDocs(query(collection(db,"payments"), orderBy("createdAt","desc"), limit(6)))).docs;
+    if(!recent.length){ tbody.innerHTML=`<tr><td colspan="4" style="text-align:center;color:#777;padding:30px">No payments yet</td></tr>`; }
+    recent.forEach(d=>{ const p=d.data(); tbody.innerHTML += `<tr><td>${p.memberName||"-"}</td><td>${p.contributionTitle||"-"}</td><td>${fmtTZS(p.amount)}</td><td><span class="badge ${p.status==="completed"?"success":p.status==="pending"?"pending":"danger"}">${p.status}</span></td></tr>`; });
+
+    // Upcoming events
+    const upc = document.getElementById("upcoming"); upc.innerHTML="";
+    const evs = (await getDocs(collection(db,"events"))).docs.slice(0,4);
+    if(!evs.length){ upc.innerHTML=`<div style="color:#777;text-align:center;padding:20px">No upcoming events</div>`; }
+    evs.forEach(d=>{ const e=d.data(); const dt=e.date?(e.date.toDate?e.date.toDate():new Date(e.date)):null;
+      upc.innerHTML += `<div class="event-card" style="margin-bottom:10px"><div class="date"><div class="d">${dt?dt.getDate():"-"}</div><div class="m">${dt?dt.toLocaleString("en",{month:"short"}):""}</div></div><div><h4>${e.title}</h4><div class="meta"><i class="fa-solid fa-location-dot"></i> ${e.location||"TBA"}</div><span class="badge gold">${e.type||"family"}</span></div></div>`;
+    });
+  }catch(err){ console.error(err); }
+};
+
+(async ()=>{
+  const u = await guardPage({});
+  mountShell('dashboard','Dashboard');
+  if(typeof initPage==='function') initPage(u);
+})();
+</script>
+</body></html>

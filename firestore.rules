@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn(){ return request.auth != null; }
+    function userDoc(){ return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function role(){ return userDoc().role; }
+    function approved(){ return userDoc().status == 'approved' || role() == 'superadmin'; }
+    function isAdmin(){ return role() == 'admin' || role() == 'superadmin'; }
+    function isSuper(){ return role() == 'superadmin'; }
+    function isTreasurer(){ return role() == 'treasurer' || isSuper(); }
+
+    // USERS
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      // Self-create during registration (role=member, status=pending)
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'member'
+        && request.resource.data.status == 'pending';
+      // Self edits (non-privileged fields)
+      allow update: if isSignedIn() && request.auth.uid == uid
+        && !('role' in request.resource.data.diff(resource.data).affectedKeys())
+        && !('status' in request.resource.data.diff(resource.data).affectedKeys())
+        && !('blocked' in request.resource.data.diff(resource.data).affectedKeys());
+      // Admin can change status / blocked
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','approvedAt','approvedBy','blocked']);
+      // Only superadmin can assign roles or delete
+      allow update: if isSuper();
+      allow delete: if isSuper();
+    }
+
+    // CONTRIBUTIONS — treasurer creates/edits, admin can delete/pause
+    match /contributions/{id} {
+      allow read: if isSignedIn() && approved();
+      allow create: if isSignedIn() && isTreasurer();
+      allow update: if isSignedIn() && (isTreasurer() || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])));
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // PAYMENTS — members create their own; only completed flag from server fn
+    match /payments/{id} {
+      allow read: if isSignedIn() && (resource.data.memberId == request.auth.uid || isAdmin() || isTreasurer());
+      allow create: if isSignedIn() && approved() && request.resource.data.memberId == request.auth.uid;
+      allow update: if isSignedIn() && (isTreasurer() || isAdmin());
+      allow delete: if isSuper();
+    }
+
+    // EVENTS — admin manages, members RSVP
+    match /events/{id} {
+      allow read: if isSignedIn() && approved();
+      allow create, delete: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && (isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps']));
+    }
+
+    // GALLERY — admin uploads/deletes, all members read
+    match /gallery/{id} {
+      allow read: if isSignedIn() && approved();
+      allow create, delete, update: if isSignedIn() && isAdmin();
+    }
+
+    // NOTIFICATIONS — readable to signed-in approved; created by anyone signed in (for system events)
+    match /notifications/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // MESSAGES (bulk SMS/email queue) — admin only
+    match /messages/{id} {
+      allow read, create: if isSignedIn() && isAdmin();
+      allow update, delete: if isSuper();
+    }
+
+    // ACTIVITY LOGS — write by signed-in, read by superadmin
+    match /activity_logs/{id} {
+      allow read: if isSignedIn() && isSuper();
+      allow create: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Admin — Mariki Family Portal</title></head>
+<body><div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app"><div id="shell-sidebar"></div><div class="main"><div id="shell-topbar"></div><div class="content">
+<div class="page-head"><div><h1>Admin Panel</h1><div class="sub">Approve, manage and oversee the family portal.</div></div></div>
+<div class="grid cols-4" style="margin-bottom:22px">
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="value" id="kPending">—</div><div class="label">Pending approvals</div></div>
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-users"></i></div></div><div class="value" id="kApproved">—</div><div class="label">Approved members</div></div>
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-ban"></i></div></div><div class="value" id="kBlocked">—</div><div class="label">Blocked users</div></div>
+  <div class="stat-card"><div class="top"><div class="icon"><i class="fa-solid fa-user-shield"></i></div></div><div class="value" id="kAdmins">—</div><div class="label">Admins / Roles</div></div>
+</div>
+
+<div class="chart-card" style="margin-bottom:22px"><div class="head"><h3>Pending registrations</h3></div>
+<div class="table-wrap"><table class="table" id="pendTbl"><thead><tr><th>Name</th><th>Branch</th><th>Phone</th><th>Joined</th><th>Action</th></tr></thead><tbody></tbody></table></div></div>
+
+<div class="chart-card"><div class="head"><h3>All users</h3></div>
+<div class="table-wrap"><table class="table" id="allTbl"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table></div></div>
+
+<div class="chart-card" style="margin-top:22px" data-role-only="superadmin"><div class="head"><h3>Activity logs (Superadmin)</h3></div>
+<div class="table-wrap"><table class="table" id="logTbl"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Meta</th></tr></thead><tbody></tbody></table></div></div>
+</div></div></div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db, adminNotify } from "./firebase.js";
+import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { toast, fmtDate, relTime } from "./assets/js/common.js";
+let USER;
+async function refresh(){
+  const snap=await getDocs(collection(db,"users")); const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+  const pending=all.filter(u=>u.status==="pending"), approved=all.filter(u=>u.status==="approved"), blocked=all.filter(u=>u.blocked), admins=all.filter(u=>["admin","superadmin","treasurer"].includes(u.role));
+  document.getElementById("kPending").textContent=pending.length;
+  document.getElementById("kApproved").textContent=approved.length;
+  document.getElementById("kBlocked").textContent=blocked.length;
+  document.getElementById("kAdmins").textContent=admins.length;
+
+  const pt=document.querySelector("#pendTbl tbody");
+  pt.innerHTML = pending.length?pending.map(u=>`<tr><td>${u.fullName}</td><td>${u.branch||"-"}</td><td>${u.phone||"-"}</td><td>${fmtDate(u.createdAt)}</td>
+  <td><button class="btn btn-gold btn-sm" data-app="${u.id}"><i class="fa-solid fa-check"></i> Approve</button> <button class="btn btn-danger btn-sm" data-rej="${u.id}"><i class="fa-solid fa-xmark"></i> Reject</button></td></tr>`).join(""):`<tr><td colspan="5" style="text-align:center;color:#777;padding:20px">No pending registrations</td></tr>`;
+
+  const at=document.querySelector("#allTbl tbody");
+  at.innerHTML = all.map(u=>`<tr><td>${u.fullName}</td><td>${u.email}</td>
+  <td>${USER.role==="superadmin"?`<select data-role="${u.id}" style="background:#1a1a1a;color:#fff;border:1px solid var(--card-bd);padding:6px;border-radius:8px">
+    ${["member","treasurer","admin","superadmin"].map(r=>`<option ${u.role===r?"selected":""}>${r}</option>`).join("")}
+  </select>`:`<span class="badge gold">${u.role}</span>`}</td>
+  <td><span class="badge ${u.status==="approved"?"success":u.status==="pending"?"pending":"danger"}">${u.status}${u.blocked?" / blocked":""}</span></td>
+  <td>
+    ${u.blocked?`<button class="btn btn-ghost btn-sm" data-unblock="${u.id}">Unblock</button>`:`<button class="btn btn-ghost btn-sm" data-block="${u.id}">Block</button>`}
+    ${USER.role==="superadmin"?`<button class="btn btn-danger btn-sm" data-del="${u.id}"><i class="fa-solid fa-trash"></i></button>`:""}
+  </td></tr>`).join("");
+
+  at.querySelectorAll("[data-role]").forEach(s=>s.onchange=async e=>{ await updateDoc(doc(db,"users",s.dataset.role),{role:e.target.value}); toast("Role updated","success"); });
+  at.querySelectorAll("[data-block]").forEach(b=>b.onclick=async ()=>{ await updateDoc(doc(db,"users",b.dataset.block),{blocked:true}); toast("Blocked","success"); refresh(); });
+  at.querySelectorAll("[data-unblock]").forEach(b=>b.onclick=async ()=>{ await updateDoc(doc(db,"users",b.dataset.unblock),{blocked:false}); toast("Unblocked","success"); refresh(); });
+  at.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Delete this user record? (Auth account remains)")) return; await deleteDoc(doc(db,"users",b.dataset.del)); toast("Deleted","success"); refresh(); });
+  pt.querySelectorAll("[data-app]").forEach(b=>b.onclick=async ()=>{
+    await updateDoc(doc(db,"users",b.dataset.app),{status:"approved", approvedAt:serverTimestamp(), approvedBy:USER.uid});
+    await addDoc(collection(db,"notifications"),{type:"member_approved",title:"Approved",message:"Welcome to the family portal!",audience:"user",targetUserId:b.dataset.app,read:false,createdAt:serverTimestamp()});
+    await addDoc(collection(db,"activity_logs"),{action:"approve_user",userId:USER.uid,target:b.dataset.app,createdAt:serverTimestamp()});
+    toast("Member approved","success"); refresh();
+  });
+  pt.querySelectorAll("[data-rej]").forEach(b=>b.onclick=async ()=>{
+    await updateDoc(doc(db,"users",b.dataset.rej),{status:"rejected"});
+    await addDoc(collection(db,"notifications"),{type:"member_rejected",title:"Application rejected",message:"Please contact the family admin.",audience:"user",targetUserId:b.dataset.rej,read:false,createdAt:serverTimestamp()});
+    toast("Rejected","success"); refresh();
+  });
+
+  if(USER.role==="superadmin"){
+    const lt=document.querySelector("#logTbl tbody");
+    try{
+      const lsnap=await getDocs(query(collection(db,"activity_logs"), orderBy("createdAt","desc"), limit(50)));
+      lt.innerHTML = lsnap.empty?`<tr><td colspan="4" style="text-align:center;color:#777;padding:20px">No logs</td></tr>`:lsnap.docs.map(d=>{ const l=d.data(); return `<tr><td>${relTime(l.createdAt)}</td><td><span class="badge info">${l.action}</span></td><td>${l.userId||"-"}</td><td style="font-family:monospace;font-size:12px;color:#888">${JSON.stringify(l.meta||l.target||"")}</td></tr>`; }).join("");
+    }catch(e){ lt.innerHTML=`<tr><td colspan="4">${e.message}</td></tr>`; }
+  }
+}
+window.initPage = async (u)=>{ USER=u; await refresh(); };
+
+(async ()=>{ const u = await guardPage({ roles: ["admin","superadmin"] }); mountShell('admin','Admin'); if(typeof initPage==='function') initPage(u); })();
+</script></body></html>

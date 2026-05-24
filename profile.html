@@ -1,0 +1,72 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Profile — Mariki Family Portal</title></head>
+<body><div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app"><div id="shell-sidebar"></div><div class="main"><div id="shell-topbar"></div><div class="content">
+<div class="page-head"><div><h1>My Profile</h1><div class="sub">Manage your personal information.</div></div></div>
+<div class="grid cols-2">
+<div class="chart-card">
+<div style="display:flex;gap:18px;align-items:center;margin-bottom:18px">
+<div class="avatar" data-user-avatar style="width:84px;height:84px;font-size:28px"></div>
+<div><div style="font-family:var(--display);font-size:22px" data-user-name></div><div style="color:#888;text-transform:uppercase;letter-spacing:2px;font-size:11px" data-user-role></div></div>
+</div>
+<form id="pForm">
+<div class="row"><div class="field"><label>First name</label><input name="firstName"></div><div class="field"><label>Middle name</label><input name="middleName"></div></div>
+<div class="row"><div class="field"><label>Last name</label><input name="lastName"></div><div class="field"><label>Gender</label><select name="gender"><option>Male</option><option>Female</option><option>Other</option></select></div></div>
+<div class="row"><div class="field"><label>Phone</label><input name="phone"></div><div class="field"><label>WhatsApp</label><input name="whatsapp"></div></div>
+<div class="row-3"><div class="field"><label>Country</label><input name="country"></div><div class="field"><label>Region</label><input name="region"></div><div class="field"><label>District</label><input name="district"></div></div>
+<div class="field"><label>Biography</label><textarea name="bio" rows="3"></textarea></div>
+<button class="btn btn-gold" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save changes</button>
+</form>
+</div>
+<div class="chart-card">
+<h3 style="font-family:var(--display);margin-bottom:10px">Profile photo</h3>
+<div class="avatar-upload"><div class="preview" id="pPrev"><i class="fa-solid fa-user"></i></div>
+<input type="file" id="pFile" accept="image/*" style="display:none">
+<button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById(`pFile`).click()">Choose image</button></div>
+
+<h3 style="font-family:var(--display);margin:18px 0 10px">Family details</h3>
+<form id="fForm">
+<div class="row"><div class="field"><label>Branch / Clan</label><input name="branch"></div><div class="field"><label>Marital status</label><select name="marital"><option>Single</option><option>Married</option><option>Widowed</option><option>Divorced</option></select></div></div>
+<div class="row"><div class="field"><label>Spouse</label><input name="spouse"></div><div class="field"><label>Children</label><input type="number" min="0" name="children"></div></div>
+<button class="btn btn-gold" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save family info</button>
+</form>
+</div>
+</div></div></div></div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { uploadToCloudinary } from "./assets/js/cloudinary.js";
+import { toast } from "./assets/js/common.js";
+window.initPage = async (u)=>{
+  ["firstName","middleName","lastName","gender","phone","whatsapp","country","region","district","bio"].forEach(k=>{ const el=document.querySelector(`#pForm [name=${k}]`); if(el) el.value=u[k]||""; });
+  ["branch","marital","spouse","children"].forEach(k=>{ const el=document.querySelector(`#fForm [name=${k}]`); if(el) el.value=u[k]||""; });
+  if(u.photoURL) document.getElementById("pPrev").innerHTML=`<img src="${u.photoURL}">`;
+
+  document.getElementById("pForm").addEventListener("submit", async e=>{
+    e.preventDefault(); const f=Object.fromEntries(new FormData(e.target).entries());
+    await updateDoc(doc(db,"users",u.uid), { ...f, fullName:[f.firstName,f.middleName,f.lastName].filter(Boolean).join(" ") });
+    toast("Profile saved","success");
+  });
+  document.getElementById("fForm").addEventListener("submit", async e=>{
+    e.preventDefault(); const f=Object.fromEntries(new FormData(e.target).entries());
+    await updateDoc(doc(db,"users",u.uid), { ...f, children:Number(f.children||0) }); toast("Family info saved","success");
+  });
+  document.getElementById("pFile").onchange=async e=>{
+    const file=e.target.files[0]; if(!file) return;
+    toast("Uploading photo...","");
+    try{ const up=await uploadToCloudinary(file,"profiles"); await updateDoc(doc(db,"users",u.uid),{photoURL:up.url});
+      document.getElementById("pPrev").innerHTML=`<img src="${up.url}">`; document.querySelectorAll("[data-user-avatar]").forEach(a=>a.innerHTML=`<img src="${up.url}">`); toast("Photo updated","success");
+    }catch(err){ toast(err.message,"error"); }
+  };
+};
+
+(async ()=>{ const u = await guardPage({}); mountShell('profile','Profile'); if(typeof initPage==='function') initPage(u); })();
+</script></body></html>

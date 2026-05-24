@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Settings — Mariki Family Portal</title></head>
+<body><div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app"><div id="shell-sidebar"></div><div class="main"><div id="shell-topbar"></div><div class="content">
+<div class="page-head"><div><h1>Settings</h1><div class="sub">Account preferences and security.</div></div></div>
+<div class="grid cols-2">
+<div class="chart-card">
+<h3 style="font-family:var(--display);margin-bottom:14px">Security</h3>
+<form id="pwdForm">
+<div class="field"><label>New password</label><input type="password" name="password" minlength="6" required></div>
+<div class="field"><label>Confirm password</label><input type="password" name="confirm" minlength="6" required></div>
+<button class="btn btn-gold" type="submit"><i class="fa-solid fa-key"></i> Update password</button>
+</form>
+<hr style="border:none;border-top:1px solid var(--card-bd);margin:22px 0">
+<button class="btn btn-ghost" id="verifyBtn"><i class="fa-regular fa-envelope"></i> Resend verification email</button>
+</div>
+<div class="chart-card">
+<h3 style="font-family:var(--display);margin-bottom:14px">Notifications</h3>
+<label class="checkbox" style="margin-bottom:10px"><input type="checkbox" checked> Email me when contributions are created</label>
+<label class="checkbox" style="margin-bottom:10px"><input type="checkbox" checked> SMS reminders for events</label>
+<label class="checkbox" style="margin-bottom:10px"><input type="checkbox"> Weekly family digest</label>
+<h3 style="font-family:var(--display);margin:22px 0 10px">Danger zone</h3>
+<button class="btn btn-danger" data-logout><i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out everywhere</button>
+</div>
+</div></div></div></div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { auth } from "./firebase.js";
+import { updatePassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { toast } from "./assets/js/common.js";
+window.initPage = async ()=>{
+  document.getElementById("pwdForm").addEventListener("submit", async e=>{
+    e.preventDefault(); const f=Object.fromEntries(new FormData(e.target).entries());
+    if(f.password!==f.confirm){ toast("Passwords do not match","error"); return; }
+    try{ await updatePassword(auth.currentUser, f.password); toast("Password updated","success"); e.target.reset(); }
+    catch(err){ toast(err.message,"error"); }
+  });
+  document.getElementById("verifyBtn").onclick=async ()=>{ try{ await sendEmailVerification(auth.currentUser); toast("Verification email sent","success"); }catch(err){ toast(err.message,"error"); } };
+};
+
+(async ()=>{ const u = await guardPage({}); mountShell('settings','Settings'); if(typeof initPage==='function') initPage(u); })();
+</script></body></html>

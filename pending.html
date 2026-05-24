@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Awaiting approval — Mariki</title></head>
+<body><div class="aurora"></div>
+<div style="min-height:100vh;display:grid;place-items:center;padding:30px;text-align:center">
+<div class="auth-card" style="max-width:540px">
+<div style="font-size:48px;color:var(--gold-2);margin-bottom:12px"><i class="fa-solid fa-hourglass-half"></i></div>
+<h2>Application received</h2><p class="sub" style="margin:10px 0 18px">Karibu sana! Your registration has been submitted and the Superadmin has been notified. You'll receive an email once your account is approved.</p>
+<button class="btn btn-ghost" data-logout>Sign out</button>
+</div></div>
+<script type="module">
+import { auth } from './firebase.js';
+import { signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+document.querySelector('[data-logout]').addEventListener('click', async ()=>{ await signOut(auth); location.href='index.html'; });
+</script></body></html>

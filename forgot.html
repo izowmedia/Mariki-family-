@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Forgot password — Mariki</title></head>
+<body><div class="aurora"></div>
+<div class="auth-wrap"><aside class="auth-side"><a href="index.html" class="brand"><span class="logo">M</span><span>Mariki</span></a><div class="pitch">Reset your <span>access</span>. We'll guide you back home.</div><div></div></aside>
+<div class="auth-form"><div class="auth-card">
+<h2>Forgot password</h2><div class="sub">We'll email you a secure reset link.</div>
+<form id="f"><div class="field"><label>Email</label><input type="email" name="email" required></div>
+<button class="btn btn-gold" style="width:100%;justify-content:center">Send reset link</button></form>
+<div class="alt"><a href="login.html">← Back to sign in</a></div>
+</div></div></div>
+<script type="module">
+import { auth } from './firebase.js';
+import { sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { toast } from './assets/js/common.js';
+document.getElementById('f').addEventListener('submit', async e=>{e.preventDefault();
+try{ await sendPasswordResetEmail(auth, new FormData(e.target).get('email')); toast('Reset email sent','success'); }
+catch(err){ toast(err.message,'error'); }});
+</script></body></html>

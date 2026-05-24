@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Members — Mariki Family Portal</title></head>
+<body>
+<div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app">
+  <div id="shell-sidebar"></div>
+  <div class="main">
+    <div id="shell-topbar"></div>
+    <div class="content">
+<div class="page-head"><div><h1>Family Members</h1><div class="sub">Approved members of the Mariki family.</div></div>
+<input id="searchM" class="" placeholder="Search by name, branch, district..." style="padding:10px 14px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid var(--card-bd);color:#fff;min-width:280px"></div>
+<div class="table-wrap"><table class="table" id="membersTbl"><thead><tr><th></th><th>Name</th><th>Branch</th><th>Phone</th><th>Region</th><th>Role</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+</div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+let ALL=[];
+function render(rows){
+  const tbody = document.querySelector("#membersTbl tbody");
+  if(!rows.length){ tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:#777;padding:30px">No members found</td></tr>`; return; }
+  tbody.innerHTML = rows.map(u=>`<tr>
+    <td><div class="avatar" style="width:34px;height:34px;font-size:13px">${u.photoURL?`<img src="${u.photoURL}">`:(u.firstName?.[0]||"M")}</div></td>
+    <td><div style="font-weight:600">${u.fullName||u.firstName+" "+u.lastName}</div><div style="font-size:12px;color:#888">${u.email||""}</div></td>
+    <td>${u.branch||"-"}</td><td>${u.phone||"-"}</td><td>${u.region||"-"}</td>
+    <td><span class="badge gold">${u.role}</span></td>
+    <td><span class="badge ${u.status==="approved"?"success":u.status==="pending"?"pending":"danger"}">${u.status}</span></td>
+  </tr>`).join("");
+}
+window.initPage = async ()=>{
+  const snap = await getDocs(collection(db,"users"));
+  ALL = snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.status==="approved");
+  render(ALL);
+  document.getElementById("searchM").addEventListener("input",e=>{
+    const q = e.target.value.toLowerCase();
+    render(ALL.filter(u => [u.fullName,u.firstName,u.lastName,u.branch,u.region,u.district,u.phone].join(" ").toLowerCase().includes(q)));
+  });
+};
+
+(async ()=>{
+  const u = await guardPage({});
+  mountShell('members','Members');
+  if(typeof initPage==='function') initPage(u);
+})();
+</script></body></html>

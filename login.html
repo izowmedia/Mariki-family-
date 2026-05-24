@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Sign in — Mariki Family Portal</title></head>
+<body>
+<div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="aurora"></div>
+<div class="auth-wrap">
+  <aside class="auth-side">
+    <a href="index.html" class="brand"><span class="logo">M</span><span>Mariki</span></a>
+    <div class="pitch">Welcome back to the <span>Mariki Family</span> Portal.</div>
+    <div style="color:#9a9a9a;font-size:14px;font-style:italic">"Umoja Wetu Ni Nguvu Yetu"</div>
+  </aside>
+  <div class="auth-form">
+    <div class="auth-card">
+      <h2>Sign in</h2><div class="sub">Continue to your family dashboard.</div>
+      <button class="google-btn" id="googleBtn"><i class="fa-brands fa-google" style="color:#ea4335"></i> Continue with Google</button>
+      <div class="divider">or sign in with email</div>
+      <form id="loginForm">
+        <div class="field"><label>Email</label><input type="email" name="email" required></div>
+        <div class="field"><label>Password</label><input type="password" name="password" required></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 16px">
+          <label class="checkbox"><input type="checkbox" id="remember" checked> Remember me</label>
+          <a href="forgot.html" style="color:var(--gold-2);font-size:13px">Forgot password?</a>
+        </div>
+        <button class="btn btn-gold" style="width:100%;justify-content:center" type="submit">Sign in</button>
+      </form>
+      <div class="alt">New to the family? <a href="register.html">Create an account</a></div>
+    </div>
+  </div>
+</div>
+<script type="module">
+import { auth, googleProvider } from './firebase.js';
+import { signInWithEmailAndPassword, signInWithPopup, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { toast, hideLoader } from './assets/js/common.js';
+window.addEventListener('load', hideLoader);
+
+document.getElementById('loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const f = new FormData(e.target);
+  try{
+    await setPersistence(auth, document.getElementById('remember').checked ? browserLocalPersistence : browserSessionPersistence);
+    await signInWithEmailAndPassword(auth, f.get('email'), f.get('password'));
+    toast('Welcome back!','success'); setTimeout(()=>location.href='dashboard.html',600);
+  }catch(err){ toast(err.message,'error'); }
+});
+document.getElementById('googleBtn').addEventListener('click', async ()=>{
+  try{ await signInWithPopup(auth, googleProvider); location.href='dashboard.html'; }
+  catch(err){ toast(err.message,'error'); }
+});
+</script>
+</body></html>

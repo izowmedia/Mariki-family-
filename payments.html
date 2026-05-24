@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Payments — Mariki Family Portal</title></head>
+<body>
+<div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app">
+  <div id="shell-sidebar"></div>
+  <div class="main">
+    <div id="shell-topbar"></div>
+    <div class="content">
+<div class="page-head"><div><h1>Payments</h1><div class="sub">Full transaction history.</div></div>
+<div style="display:flex;gap:10px"><select id="filt" style="padding:10px 14px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid var(--card-bd);color:#fff"><option value="">All statuses</option><option>completed</option><option>pending</option><option>failed</option></select></div></div>
+<div class="table-wrap"><table class="table" id="payTbl"><thead><tr><th>Date</th><th>Member</th><th>Contribution</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+</div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { fmtTZS, fmtDate } from "./assets/js/common.js";
+let ALL=[];
+function render(rows){
+  const tbody=document.querySelector("#payTbl tbody");
+  if(!rows.length){ tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:#777;padding:30px">No payments</td></tr>`; return; }
+  tbody.innerHTML = rows.map(p=>`<tr><td>${fmtDate(p.createdAt)}</td><td>${p.memberName||"-"}</td><td>${p.contributionTitle||"-"}</td><td style="font-family:monospace;color:#888">${p.reference||"-"}</td><td>${fmtTZS(p.amount)}</td><td><span class="badge ${p.status==="completed"?"success":p.status==="pending"?"pending":"danger"}">${p.status}</span></td></tr>`).join("");
+}
+window.initPage = async (u)=>{
+  const snap = await getDocs(query(collection(db,"payments"), orderBy("createdAt","desc")));
+  ALL = snap.docs.map(d=>({id:d.id,...d.data()}));
+  if(u.role==="member") ALL = ALL.filter(p=>p.memberId===u.uid);
+  render(ALL);
+  document.getElementById("filt").addEventListener("change",e=>{ const v=e.target.value; render(v?ALL.filter(p=>p.status===v):ALL); });
+};
+
+(async ()=>{
+  const u = await guardPage({});
+  mountShell('payments','Payments');
+  if(typeof initPage==='function') initPage(u);
+})();
+</script></body></html>

@@ -1,0 +1,119 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Contributions — Mariki Family Portal</title></head>
+<body>
+<div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app">
+  <div id="shell-sidebar"></div>
+  <div class="main">
+    <div id="shell-topbar"></div>
+    <div class="content">
+<div class="page-head">
+  <div><h1>Contributions</h1><div class="sub">Active family contributions. Only the Treasurer can create or edit.</div></div>
+  <button class="btn btn-gold" id="newBtn" data-role-only="treasurer,superadmin"><i class="fa-solid fa-plus"></i> New contribution</button>
+</div>
+<div class="grid cols-3" id="cList"><div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div></div>
+
+<div class="modal" id="newModal"><div class="modal-card">
+<h3>Create contribution</h3>
+<form id="newForm">
+<div class="field"><label>Title</label><input name="title" required></div>
+<div class="field"><label>Description</label><textarea name="description" rows="2"></textarea></div>
+<div class="row"><div class="field"><label>Amount (TZS)</label><input type="number" min="0" name="amount" required></div>
+<div class="field"><label>Deadline</label><input type="date" name="deadline" required></div></div>
+<div class="row"><div class="field"><label>Type</label><select name="type"><option>General</option><option>Wedding</option><option>Funeral</option><option>Education</option><option>Project</option></select></div>
+<div class="field"><label>Status</label><select name="status"><option value="active">Active</option><option value="paused">Paused</option></select></div></div>
+<div class="modal-actions"><button type="button" class="btn btn-ghost" onclick="document.getElementById(`newModal`).classList.remove(`open`)">Cancel</button><button class="btn btn-gold" type="submit">Create</button></div>
+</form>
+</div></div>
+
+<div class="modal" id="payModal"><div class="modal-card">
+<h3>Pay contribution</h3>
+<div id="payInfo" style="color:#bdbdbd;margin-bottom:14px"></div>
+<form id="payForm">
+<div class="row"><div class="field"><label>Amount (TZS)</label><input type="number" min="100" name="amount" required></div>
+<div class="field"><label>Phone (+255...)</label><input name="phone" required></div></div>
+<div class="modal-actions"><button type="button" class="btn btn-ghost" onclick="document.getElementById(`payModal`).classList.remove(`open`)">Cancel</button><button class="btn btn-gold" type="submit"><i class="fa-solid fa-mobile-screen"></i> Pay via ClickPesa</button></div>
+</form>
+</div></div>
+</div>
+  </div>
+</div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { collection, getDocs, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { createPayment } from "./assets/js/clickpesa.js";
+import { fmtTZS, fmtDate, toast } from "./assets/js/common.js";
+let USER=null; let PAYING=null;
+
+async function load(){
+  const list = document.getElementById("cList");
+  const snap = await getDocs(collection(db,"contributions"));
+  if(snap.empty){ list.innerHTML=`<div class="card" style="grid-column:1/-1;text-align:center;color:#888;padding:40px">No contributions yet.</div>`; return; }
+  list.innerHTML = snap.docs.map(d=>{ const c={id:d.id,...d.data()};
+    return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="icon"><i class="fa-solid fa-hand-holding-dollar"></i></div><span class="badge ${c.status==="active"?"success":"pending"}">${c.status}</span></div>
+    <h3>${c.title}</h3><p>${c.description||""}</p>
+    <div style="margin:14px 0;display:flex;justify-content:space-between;font-size:13px"><div><div style="color:#888">Target</div><div style="color:var(--gold-2);font-weight:700">${fmtTZS(c.amount)}</div></div><div style="text-align:right"><div style="color:#888">Deadline</div><div>${fmtDate(c.deadline)}</div></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${c.status==="active"?`<button class="btn btn-gold btn-sm" data-pay="${c.id}" data-title="${c.title}" data-amt="${c.amount}"><i class="fa-solid fa-credit-card"></i> Pay</button>`:""}
+      ${USER.role==="admin"||USER.role==="superadmin"?`<button class="btn btn-ghost btn-sm" data-toggle="${c.id}" data-st="${c.status}">${c.status==="active"?"Pause":"Resume"}</button><button class="btn btn-danger btn-sm" data-del="${c.id}"><i class="fa-solid fa-trash"></i></button>`:""}
+    </div></div>`;
+  }).join("");
+  list.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{
+    PAYING = { id:b.dataset.pay, title:b.dataset.title, amount:Number(b.dataset.amt) };
+    document.getElementById("payInfo").innerHTML = `<b>${PAYING.title}</b> — suggested ${fmtTZS(PAYING.amount)}`;
+    document.querySelector("#payForm [name=amount]").value = PAYING.amount;
+    document.querySelector("#payForm [name=phone]").value = USER.phone||"";
+    document.getElementById("payModal").classList.add("open");
+  });
+  list.querySelectorAll("[data-toggle]").forEach(b=>b.onclick=async ()=>{
+    const newSt = b.dataset.st==="active"?"paused":"active";
+    await updateDoc(doc(db,"contributions",b.dataset.toggle),{status:newSt}); toast("Updated","success"); load();
+  });
+  list.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{
+    if(!confirm("Delete this contribution?")) return;
+    await deleteDoc(doc(db,"contributions",b.dataset.del)); toast("Deleted","success"); load();
+  });
+}
+
+window.initPage = async (u)=>{ USER=u;
+  if(["treasurer","superadmin"].includes(u.role)){ document.getElementById("newBtn").onclick=()=>document.getElementById("newModal").classList.add("open"); }
+  await load();
+
+  document.getElementById("newForm").addEventListener("submit", async e=>{
+    e.preventDefault(); const f=Object.fromEntries(new FormData(e.target).entries());
+    await addDoc(collection(db,"contributions"),{ ...f, amount:Number(f.amount), createdAt:serverTimestamp(), createdBy:u.uid, createdByName:u.fullName });
+    await addDoc(collection(db,"notifications"),{type:"contribution_created",title:"New contribution",message:`${f.title} - ${fmtTZS(f.amount)}`,audience:"all",read:false,createdAt:serverTimestamp()});
+    document.getElementById("newModal").classList.remove("open"); e.target.reset(); toast("Contribution created","success"); load();
+  });
+  document.getElementById("payForm").addEventListener("submit", async e=>{
+    e.preventDefault(); const f=Object.fromEntries(new FormData(e.target).entries());
+    const ref = "MFP-"+Date.now();
+    const payDoc = await addDoc(collection(db,"payments"),{
+      contributionId: PAYING.id, contributionTitle: PAYING.title,
+      memberId: u.uid, memberName: u.fullName, memberPhone: f.phone,
+      amount: Number(f.amount), currency:"TZS", status:"pending", reference: ref, createdAt: serverTimestamp()
+    });
+    try{
+      const res = await createPayment({ amount:Number(f.amount), phone:f.phone, reference:ref });
+      await updateDoc(doc(db,"payments",payDoc.id),{ orderReference: res.orderReference||ref, paymentUrl: res.paymentUrl||"" });
+      if(res.paymentUrl){ window.location.href = res.paymentUrl; }
+      else toast("Payment initiated. You will receive an STK push on your phone.","success");
+    }catch(err){ console.error(err); toast("Payment initiation failed: "+err.message,"error"); }
+    document.getElementById("payModal").classList.remove("open");
+  });
+};
+
+(async ()=>{
+  const u = await guardPage({});
+  mountShell('contributions','Contributions');
+  if(typeof initPage==='function') initPage(u);
+})();
+</script></body></html>

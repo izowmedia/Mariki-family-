@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Gallery — Mariki Family Portal</title></head>
+<body><div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app"><div id="shell-sidebar"></div><div class="main"><div id="shell-topbar"></div><div class="content">
+<div class="page-head"><div><h1>Family Gallery</h1><div class="sub">Memories that bind us together.</div></div>
+<div style="display:flex;gap:10px"><input type="file" id="upFile" accept="image/*,video/*" style="display:none" data-role-only="admin,superadmin">
+<button class="btn btn-gold" id="upBtn" data-role-only="admin,superadmin"><i class="fa-solid fa-cloud-arrow-up"></i> Upload</button></div></div>
+<div class="gallery" id="gal"><div class="skeleton" style="aspect-ratio:1/1"></div><div class="skeleton" style="aspect-ratio:1/1"></div><div class="skeleton" style="aspect-ratio:1/1"></div><div class="skeleton" style="aspect-ratio:1/1"></div></div>
+<div class="lightbox" id="lb"><span class="close" onclick="document.getElementById(`lb`).classList.remove(`open`)"><i class="fa-solid fa-xmark"></i></span><img id="lbImg" src=""></div></div></div></div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { uploadToCloudinary } from "./assets/js/cloudinary.js";
+import { toast } from "./assets/js/common.js";
+let USER;
+async function load(){
+  const gal = document.getElementById("gal");
+  const snap = await getDocs(query(collection(db,"gallery"), orderBy("createdAt","desc")));
+  if(snap.empty){ gal.innerHTML=`<div style="grid-column:1/-1;color:#777;text-align:center;padding:40px">No media uploaded yet.</div>`; return; }
+  gal.innerHTML = snap.docs.map(d=>{ const m={id:d.id,...d.data()};
+    const isVid = (m.type||"").includes("video");
+    return `<div class="tile">
+      ${isVid?`<video src="${m.url}" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>`:`<img loading="lazy" src="${m.url}" data-full="${m.url}">`}
+      <div class="overlay"><div><div>${m.caption||"Family memory"}</div>${USER.role==="admin"||USER.role==="superadmin"?`<button class="btn btn-danger btn-sm" data-del="${m.id}" style="margin-top:6px"><i class="fa-solid fa-trash"></i></button>`:""}</div></div>
+    </div>`;
+  }).join("");
+  gal.querySelectorAll("img[data-full]").forEach(im=>im.onclick=()=>{ document.getElementById("lbImg").src=im.dataset.full; document.getElementById("lb").classList.add("open"); });
+  gal.querySelectorAll("[data-del]").forEach(b=>b.onclick=async e=>{ e.stopPropagation(); if(!confirm("Delete?")) return; await deleteDoc(doc(db,"gallery",b.dataset.del)); toast("Deleted","success"); load(); });
+}
+window.initPage = async (u)=>{ USER=u; await load();
+  if(["admin","superadmin"].includes(u.role)){
+    document.getElementById("upBtn").onclick=()=>document.getElementById("upFile").click();
+    document.getElementById("upFile").onchange=async e=>{
+      const f=e.target.files[0]; if(!f) return; toast("Uploading...","");
+      try{ const up = await uploadToCloudinary(f,"gallery");
+        await addDoc(collection(db,"gallery"),{ url:up.url, publicId:up.publicId, type:up.type, caption:f.name, uploadedBy:u.uid, createdAt: serverTimestamp() });
+        toast("Uploaded","success"); load();
+      }catch(err){ toast(err.message,"error"); }
+    };
+  }
+};
+
+(async ()=>{ const u = await guardPage({}); mountShell('gallery','Gallery'); if(typeof initPage==='function') initPage(u); })();
+</script></body></html>

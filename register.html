@@ -1,0 +1,169 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Become a Member — Mariki</title></head>
+<body>
+<div class="aurora"></div>
+<div class="auth-wrap">
+  <aside class="auth-side">
+    <a href="index.html" class="brand"><span class="logo">M</span><span>Mariki</span></a>
+    <div class="pitch">Join the <span>Mariki Family</span>.<br/>Carry the legacy forward.</div>
+    <div style="color:#9a9a9a;font-size:14px;font-style:italic">Your application is reviewed by the Superadmin before approval.</div>
+  </aside>
+  <div class="auth-form">
+    <div class="auth-card" style="max-width:620px">
+      <h2>Create member account</h2>
+      <div class="sub">Step <span id="stepNum">1</span> of 4</div>
+      <div class="stepper"><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div></div>
+      <div class="step-labels"><span class="active">Personal</span><span>Contact</span><span>Family</span><span>Profile</span></div>
+
+      <form id="regForm" style="margin-top:18px">
+        <!-- STEP 1: Personal -->
+        <div data-step="1">
+          <div class="row"><div class="field"><label>First name</label><input name="firstName" required></div>
+          <div class="field"><label>Middle name</label><input name="middleName"></div></div>
+          <div class="row"><div class="field"><label>Last name</label><input name="lastName" required></div>
+          <div class="field"><label>Gender</label><select name="gender" required><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div></div>
+          <div class="row"><div class="field"><label>Date of birth</label><input type="date" name="dob" required></div>
+          <div class="field"><label>Nationality</label><input name="nationality" value="Tanzanian" required></div></div>
+          <div class="field"><label>NIDA / ID number</label><input name="nida" required></div>
+        </div>
+
+        <!-- STEP 2: Contact -->
+        <div data-step="2" style="display:none">
+          <div class="field"><label>Email address</label><input type="email" name="email" required><div class="hint">Used for login and notifications.</div></div>
+          <div class="field"><label>Password</label><input type="password" name="password" minlength="6" required></div>
+          <div class="row"><div class="field"><label>Phone (Tanzania)</label><input name="phone" placeholder="+255712345678" required><div class="hint">Must start with +255 and be 13 chars.</div></div>
+          <div class="field"><label>WhatsApp number</label><input name="whatsapp" placeholder="+255..." required></div></div>
+          <div class="row-3"><div class="field"><label>Country</label><input name="country" value="Tanzania" required></div>
+          <div class="field"><label>Region</label><input name="region" required></div>
+          <div class="field"><label>District</label><input name="district" required></div></div>
+        </div>
+
+        <!-- STEP 3: Family -->
+        <div data-step="3" style="display:none">
+          <div class="row"><div class="field"><label>Marital status</label><select name="marital" required><option value="">Select</option><option>Single</option><option>Married</option><option>Widowed</option><option>Divorced</option></select></div>
+          <div class="field"><label>Spouse name (if any)</label><input name="spouse"></div></div>
+          <div class="row"><div class="field"><label>Number of children</label><input type="number" min="0" name="children" value="0" required></div>
+          <div class="field"><label>Clan / family branch</label><input name="branch" required></div></div>
+          <div class="row"><div class="field"><label>Father's name</label><input name="father" required></div>
+          <div class="field"><label>Mother's name</label><input name="mother" required></div></div>
+          <div class="field"><label>Relationship in family</label><input name="relationship" placeholder="e.g. Grandchild of Mzee Mariki"></div>
+        </div>
+
+        <!-- STEP 4: Profile -->
+        <div data-step="4" style="display:none">
+          <div class="field"><label>Profile picture</label>
+            <div class="avatar-upload"><div class="preview" id="avPrev"><i class="fa-solid fa-user"></i></div>
+            <input type="file" id="avFile" accept="image/*" style="display:none">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('avFile').click()">Choose image</button></div>
+          </div>
+          <div class="field"><label>Biography / About you</label><textarea name="bio" rows="4" placeholder="Tell the family about yourself..."></textarea></div>
+          <label class="checkbox"><input type="checkbox" required> I agree to the family portal terms and consent to my data being stored securely.</label>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin-top:22px">
+          <button type="button" class="btn btn-ghost" id="prevBtn" style="visibility:hidden">← Back</button>
+          <button type="button" class="btn btn-gold" id="nextBtn">Continue →</button>
+          <button type="submit" class="btn btn-gold" id="submitBtn" style="display:none"><i class="fa-solid fa-check"></i> Submit application</button>
+        </div>
+      </form>
+      <div class="alt">Already have an account? <a href="login.html">Sign in</a></div>
+    </div>
+  </div>
+</div>
+<script type="module">
+import { auth, db, adminNotify } from './firebase.js';
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { doc, setDoc, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { uploadToCloudinary } from './assets/js/cloudinary.js';
+import { toast, validateTZPhone } from './assets/js/common.js';
+
+let step=1; let photoFile=null;
+const form = document.getElementById('regForm');
+const steps = form.querySelectorAll('[data-step]');
+const dots  = document.querySelectorAll('.stepper .step');
+const labels = document.querySelectorAll('.step-labels span');
+
+function show(n){
+  steps.forEach(s=>s.style.display = (+s.dataset.step===n?'block':'none'));
+  dots.forEach((d,i)=>d.classList.toggle('active', i<n));
+  labels.forEach((l,i)=>l.classList.toggle('active', i===n-1));
+  document.getElementById('stepNum').textContent=n;
+  document.getElementById('prevBtn').style.visibility = n===1?'hidden':'visible';
+  document.getElementById('nextBtn').style.display = n===4?'none':'inline-flex';
+  document.getElementById('submitBtn').style.display = n===4?'inline-flex':'none';
+}
+function valid(n){
+  const fields = form.querySelectorAll(`[data-step="${n}"] [required]`);
+  for(const f of fields){ if(!f.value){ f.focus(); toast('Please fill all required fields','error'); return false; } }
+  if(n===2){
+    const phone=form.phone.value, wa=form.whatsapp.value;
+    if(!validateTZPhone(phone)){ toast('Phone must start with +255 and have 13 chars','error'); return false; }
+    if(!validateTZPhone(wa)){ toast('WhatsApp must start with +255 and have 13 chars','error'); return false; }
+  }
+  return true;
+}
+document.getElementById('nextBtn').onclick=()=>{ if(valid(step)){ step++; show(step); } };
+document.getElementById('prevBtn').onclick=()=>{ step--; show(step); };
+
+document.getElementById('avFile').addEventListener('change',e=>{
+  photoFile = e.target.files[0]; if(!photoFile) return;
+  const reader=new FileReader();
+  reader.onload=ev=>document.getElementById('avPrev').innerHTML=`<img src="${ev.target.result}">`;
+  reader.readAsDataURL(photoFile);
+});
+
+form.addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(!valid(4)) return;
+  const fd = new FormData(form);
+  const data = Object.fromEntries(fd.entries());
+  const btn = document.getElementById('submitBtn');
+  btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
+  try{
+    const cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
+    let photoURL='';
+    if(photoFile){
+      try{ const up = await uploadToCloudinary(photoFile,'profiles'); photoURL=up.url; }catch(err){ console.warn('Photo upload failed',err); }
+    }
+    const fullName = [data.firstName,data.middleName,data.lastName].filter(Boolean).join(' ');
+    await updateProfile(cred.user, { displayName: fullName, photoURL });
+    await sendEmailVerification(cred.user);
+
+    const userDoc = {
+      firstName:data.firstName, middleName:data.middleName||'', lastName:data.lastName,
+      fullName, gender:data.gender, dob:data.dob, nationality:data.nationality, nida:data.nida,
+      email:data.email, phone:data.phone, whatsapp:data.whatsapp,
+      country:data.country, region:data.region, district:data.district,
+      marital:data.marital, spouse:data.spouse||'', children:Number(data.children||0),
+      branch:data.branch, father:data.father, mother:data.mother, relationship:data.relationship||'',
+      bio:data.bio||'', photoURL,
+      role:'member', status:'pending', emailVerified:false, blocked:false,
+      createdAt: serverTimestamp()
+    };
+    await setDoc(doc(db,'users',cred.user.uid), userDoc);
+
+    // Notification to Superadmin
+    await addDoc(collection(db,'notifications'),{
+      type:'new_registration',
+      title:'New member registration',
+      message:`${fullName} has registered and is awaiting approval.`,
+      audience:'superadmin',
+      targetEmail: adminNotify.email, targetPhone: adminNotify.phone,
+      userId: cred.user.uid, read:false, createdAt: serverTimestamp()
+    });
+    await addDoc(collection(db,'activity_logs'),{
+      action:'register', userId:cred.user.uid, meta:{ name:fullName }, createdAt: serverTimestamp()
+    });
+
+    toast('Application submitted! Awaiting admin approval.','success');
+    setTimeout(()=>location.href='pending.html',1500);
+  }catch(err){ console.error(err); toast(err.message,'error'); btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-check"></i> Submit application'; }
+});
+show(1);
+</script>
+</body></html>

@@ -1,0 +1,81 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<title>Bulk SMS / Email — Mariki Family Portal</title></head>
+<body><div class="loader-screen"><div class="loader-ring"></div><div class="loader-brand">Mariki</div></div>
+<div class="app"><div id="shell-sidebar"></div><div class="main"><div id="shell-topbar"></div><div class="content">
+<div class="page-head"><div><h1>Bulk SMS & Email</h1><div class="sub">Send announcements to the family.</div></div></div>
+
+<div class="grid cols-2">
+<div class="chart-card">
+<h3 style="font-family:var(--display);margin-bottom:14px">Compose</h3>
+<form id="msgForm">
+<div class="row"><div class="field"><label>Channel</label><select name="channel"><option value="email">Email</option><option value="sms">SMS</option><option value="both">Both</option></select></div>
+<div class="field"><label>Audience</label><select name="audience"><option value="all">All members</option><option value="member">Role: Member</option><option value="treasurer">Role: Treasurer</option><option value="admin">Role: Admin</option><option value="selected">Selected members</option></select></div></div>
+<div class="field"><label>Template</label><select id="tpl"><option value="">— Custom —</option><option value="meeting">Meeting reminder</option><option value="contribution">Contribution call</option><option value="welcome">Welcome message</option><option value="event">Event announcement</option></select></div>
+<div class="field"><label>Subject (email only)</label><input name="subject" placeholder="e.g. Family Meeting on Saturday"></div>
+<div class="field"><label>Message</label><textarea name="message" rows="8" required></textarea>
+<div class="hint">SMS messages should be under 160 characters.</div></div>
+<div class="field" id="selWrap" style="display:none"><label>Select members</label><select multiple name="selectedIds" id="memSel" style="min-height:120px"></select></div>
+<button class="btn btn-gold" type="submit" style="width:100%;justify-content:center"><i class="fa-regular fa-paper-plane"></i> Queue broadcast</button>
+</form>
+</div>
+
+<div class="chart-card">
+<h3 style="font-family:var(--display);margin-bottom:14px">Recent broadcasts</h3>
+<div class="table-wrap"><table class="table" id="msgTbl"><thead><tr><th>When</th><th>Channel</th><th>Audience</th><th>Recipients</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+<div style="margin-top:16px;color:#888;font-size:12px;line-height:1.6">
+  <i class="fa-solid fa-circle-info"></i> Messages are queued in Firestore. Connect a delivery worker (e.g. Africa is Talking + SendGrid via Netlify Function) that reads <code>messages</code> with <code>status:"queued"</code> and sends them, then marks <code>status:"sent"</code>.
+</div>
+</div>
+</div>
+</div></div></div>
+<script type="module">
+import { mountShell } from './assets/js/sidebar.js';
+import { guardPage } from './assets/js/auth-guard.js';
+
+import { db } from "./firebase.js";
+import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { toast, relTime } from "./assets/js/common.js";
+const templates = {
+  meeting:{ subject:"Family Meeting Reminder", body:"Karibu wanafamilia, kuna mkutano wa familia siku ya {DATE} saa {TIME} mahali {VENUE}. Tafadhali jitokeze." },
+  contribution:{ subject:"Family Contribution Call", body:"Habari za leo wanafamilia. Tunakukumbusha kuhusu mchango wa {TITLE}. Kiasi: TZS {AMOUNT}. Tarehe ya mwisho: {DEADLINE}. Asante." },
+  welcome:{ subject:"Karibu Mariki Family Portal", body:"Karibu sana kwenye Mariki Family Portal. Tunafurahi kukuwa nasi." },
+  event:{ subject:"Family Event", body:"Wanafamilia, kuna tukio la {EVENT} tarehe {DATE} mahali {VENUE}. Tunakukaribisha." }
+};
+async function refresh(){
+  const tbody=document.querySelector("#msgTbl tbody");
+  const snap=await getDocs(query(collection(db,"messages"), orderBy("createdAt","desc"), limit(20)));
+  tbody.innerHTML = snap.empty?`<tr><td colspan="5" style="text-align:center;color:#777;padding:20px">No broadcasts yet</td></tr>`:snap.docs.map(d=>{ const m=d.data(); return `<tr><td>${relTime(m.createdAt)}</td><td><span class="badge info">${m.channel}</span></td><td>${m.audience}</td><td>${m.recipientCount||0}</td><td><span class="badge ${m.status==="sent"?"success":m.status==="queued"?"pending":"danger"}">${m.status}</span></td></tr>`; }).join("");
+}
+window.initPage = async (u)=>{
+  const usersSnap = await getDocs(collection(db,"users"));
+  const users = usersSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status==="approved");
+  const memSel=document.getElementById("memSel");
+  memSel.innerHTML = users.map(x=>`<option value="${x.id}">${x.fullName} — ${x.phone||x.email}</option>`).join("");
+
+  document.querySelector("[name=audience]").addEventListener("change",e=>document.getElementById("selWrap").style.display = e.target.value==="selected"?"block":"none");
+  document.getElementById("tpl").addEventListener("change",e=>{ const t=templates[e.target.value]; if(t){ document.querySelector("[name=subject]").value=t.subject; document.querySelector("[name=message]").value=t.body; } });
+
+  document.getElementById("msgForm").addEventListener("submit", async e=>{
+    e.preventDefault(); const f=Object.fromEntries(new FormData(e.target).entries());
+    let recipients=[];
+    if(f.audience==="all") recipients = users;
+    else if(f.audience==="selected"){ const ids=Array.from(document.getElementById("memSel").selectedOptions).map(o=>o.value); recipients=users.filter(u=>ids.includes(u.id)); }
+    else recipients = users.filter(u=>u.role===f.audience);
+    if(!recipients.length){ toast("No recipients matched","error"); return; }
+    await addDoc(collection(db,"messages"),{
+      channel:f.channel, audience:f.audience, subject:f.subject||"", message:f.message,
+      recipients: recipients.map(r=>({id:r.id,email:r.email,phone:r.phone,name:r.fullName})),
+      recipientCount: recipients.length, status:"queued", createdBy:u.uid, createdByName:u.fullName, createdAt: serverTimestamp()
+    });
+    toast(`Broadcast queued for ${recipients.length} recipients`,"success"); e.target.reset(); refresh();
+  });
+  await refresh();
+};
+
+(async ()=>{ const u = await guardPage({ roles: ["admin","superadmin"] }); mountShell('messaging','Bulk SMS / Email'); if(typeof initPage==='function') initPage(u); })();
+</script></body></html>
